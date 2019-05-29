@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-import torch.optim as optim
 import torchvision.models as models
 import torch.nn.functional as F
 
