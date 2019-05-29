@@ -1,23 +1,26 @@
 import numpy as np
 from PIL import Image
 import torch
-from torch.utils import data
-import torch.optim as optim
 import torch.nn as nn
+import torch.optim as optim
+from torch.utils import data
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, CenterCrop, ToTensor, Normalize
 
 from models.fcn import FCN
-from utils.data import VOC2012, CenterCropWithIgnore
+from utils.data import VOC2012, CenterCropWithIgnore, CenterCropWithIgnore
 from utils.metric import compute_meanIU, compute_confusion
+
+
+num_classes = 21
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-model = FCN()
+model = FCN(num_classes).to(device)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
-loss_fn = nn.CrossEntropyLoss(ignore_index=255)
+criterion = nn.CrossEntropyLoss(ignore_index=255)
 
 dataset = VOC2012('./VOC2012',
                   input_transform=Compose([
@@ -25,9 +28,7 @@ dataset = VOC2012('./VOC2012',
                       ToTensor(),
                       Normalize([.485, .456, .406], [.229, .224, .225]),
                   ]), target_transform=CenterCropWithIgnore(512, 255))
-loader = DataLoader(dataset, num_workers=1, batch_size=10, shuffle=True)
-
-num_classes = 21
+loader = DataLoader(dataset, num_workers=20, batch_size=4, shuffle=True)
 
 
 def train(model, loader, optimizer):
@@ -37,11 +38,11 @@ def train(model, loader, optimizer):
     all_loss = 0
     all_conf = torch.zeros(num_classes, num_classes)
     for i, data in enumerate(loader):
-        image, label = Variable(data[0].to(device)), Variable(data[1].squeeze().to(device))
+        image, label = data[0].to(device), data[1].squeeze().to(device)
 
         optimizer.zero_grad()
         pred = model.forward(image)
-        loss = loss_fn(pred, label[:, 0])
+        loss = criterion(pred, label)
         loss.backward()
         optimizer.step()
 
@@ -50,9 +51,7 @@ def train(model, loader, optimizer):
         all_conf = all_conf + compute_confusion(pred_seg, label.cpu())
         meaniu = compute_meanIU(all_conf)
 
-        if (i % 10 == 0) or (i == len(loader) - 1):
-            print("[{:4d}/{:4d}] loss:{:.3f} meanIU:{:.3f}".format(i, len(loader), all_loss / (i + 1), meaniu))
-
+    return all_loss / len(loader), meaniu
 
 def test(model, loader):
     model.to(device)
@@ -61,24 +60,27 @@ def test(model, loader):
     all_loss = 0
     all_conf = torch.zeros(num_classes, num_classes)
     for i, data in enumerate(loader):
-        image, label = Variable(data[0].to(device)), Variable(data[1].squeeze().to(device))
+        image, label = data[0].to(device), data[1].squeeze().to(device)
 
         pred = model.forward(image)
-        loss = loss_fn(pred, label)
+        loss = criterion(pred, label)
 
         val, pred_seg = pred.cpu().max(1)
         all_loss += loss.item()
         all_conf = all_conf + compute_confusion(pred_seg, label.cpu())
         meaniu = compute_meanIU(all_conf)
 
-        if (i % 50 == 0) or (i == len(loader) - 1):
-            print("[{:4d}/{:4d}] loss:{:.3f} meanIU:{:.3f}".format(i, len(loader), all_loss / (i + 1), meaniu))
+    return all_loss / len(loader), meaniu
 
 
+epoch = 10
 
-train(model, loader, optimizer)
+for e in range(epoch):
+    loss, iu = train(model, loader, optimizer)
+    print(f'Train [{e}/{epoch}] loss: {loss:.4f}, meanIoU: {iu:.4f}')
 
-test(model, loader)
+loss, iu = test(model, loader)
+print(f'Test [{e}/{epoch}] loss: {loss:.4f}, meanIoU: {iu:.4f}')
 
 import matplotlib.pyplot as plt
 
@@ -118,22 +120,21 @@ def display(pred):
     plt.imshow(return_pascal_segmentation(pred_seg[im_idx].numpy().astype(np.uint8)))
     plt.title('predicted segmentation')
 
-def test(model, loader):
-    model.to(device)
-    model.eval()
+model.to(device)
+model.eval()
 
-    all_loss = 0
-    all_conf = torch.zeros(num_classes, num_classes)
-    for i, data in enumerate(loader):
-        image, label = data[0].to(device), data[1].squeeze().to(device)
+all_loss = 0
+all_conf = torch.zeros(num_classes, num_classes)
+for i, data in enumerate(loader):
+    image, label = data[0].to(device), data[1].squeeze().to(device)
 
-        pred = model.forward(image)
-        loss = loss_fn(pred, label)
-        val, pred_seg = pred.cpu().max(1)
+    pred = model.forward(image)
+    loss = criterion(pred, label)
+    val, pred_seg = pred.cpu().max(1)
 
-        all_loss += loss.item()
-        all_conf = all_conf + compute_confusion(pred_seg, label.cpu())
-        meaniu = compute_meanIU(all_conf)
+    all_loss += loss.item()
+    all_conf = all_conf + compute_confusion(pred_seg, label.cpu())
+    meaniu = compute_meanIU(all_conf)
 
-        display(pred)
-        break
+    display(pred)
+    break

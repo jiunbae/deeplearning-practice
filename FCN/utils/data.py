@@ -22,8 +22,10 @@ class VOC2012(data.Dataset):
         return len(self.images)
     
     def __getitem__(self, index):
-        image = Image.open(str(self.images[index])).convert('RGB')
-        label = Image.open(str(self.images[index])).convert('P')
+        with open(str(self.images[index]), 'rb') as f:
+            image = Image.open(f).convert('RGB')
+        with open(str(self.labels[index]), 'rb') as f:
+            label = Image.open(f).convert('P')
 
         if self.input_transform is not None:
             image = self.input_transform(image)
@@ -58,4 +60,3 @@ class CenterCropWithIgnore:
         label[0, ys:(H-ys), (W-xs):W] = self.ignore
         
         return label
-    

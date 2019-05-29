@@ -18,15 +18,15 @@ class FCN(nn.Module):
             nn.ReLU(inplace=True),
             nn.Dropout(),
         )
-        
+
         # weight copy
         self.fconn[0].weight.data = vgg16.classifier[0].weight.view(self.fconn[0].weight.data.size())
         self.fconn[3].weight.data = vgg16.classifier[3].weight.view(self.fconn[3].weight.data.size())
-        
+
         # bias copy
         self.fconn[0].bias.data = vgg16.classifier[0].bias.view(self.fconn[0].bias.data.size())
         self.fconn[3].bias.data = vgg16.classifier[3].bias.view(self.fconn[3].bias.data.size())
-        
+
         # new score layer
         self.score = nn.Conv2d(4096, num_classes, 1)
         
