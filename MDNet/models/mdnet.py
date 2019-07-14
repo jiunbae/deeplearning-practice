@@ -1,8 +1,11 @@
 from collections import OrderedDict
 
+import scipy.io
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.optim as optim
 
 
 class MDNet(nn.Module):
@@ -38,7 +41,18 @@ class MDNet(nn.Module):
                 nn.init.normal_(m.weight, 0, 0.01)
                 nn.init.constant_(m.bias, 0)
 
-        self.layers.load_state_dict(torch.load(model_path)['shared_layers'])
+        # Load pre-trained weights
+        
+        if model_path.split('.')[-1] == 'pth':
+            self.layers.load_state_dict(torch.load(model_path)['shared_layers'])
+        elif model_path.split('.')[-1] == 'mat':
+            layers = list(scipy.io.loadmat(model_path)['layers'])[0]
+            
+            for i in range(3):
+                weight, bias = layers[i * 4]['weights'].item()[0]
+                self.layers[i][0].weight.data = torch.from_numpy(np.transpose(weight, (3, 2, 0, 1)))
+                self.layers[i][0].bias.data = torch.from_numpy(bias[:, 0])
+        
         self.params = OrderedDict()
 
         def _append(m, n):
@@ -72,8 +86,28 @@ class MDNet(nn.Module):
             return x
         elif out_layer == 'fc6_softmax':
             return F.softmax(x, dim=1)
+    
+    def set_learnable_params(self, layers):
+        for k, p in self.params.items():
+            p.requires_grad = any([k.startswith(l) for l in layers])
 
+    def optimizer(self, lr_base, lr_mult, train_all=False, momentum=0.9, w_decay=0.0005):
+        params = OrderedDict()
+        
+        for k, p in self.params.items():
+            if train_all or (not train_all and p.requires_grad):
+                params[k] = p
 
+        param_list = []
+        for k, p in params.items():
+            lr = lr_base
+            for l, m in lr_mult.items():
+                if k.startswith(l):
+                    lr = lr_base * m
+            param_list.append({'params': [p], 'lr':lr})
+            
+        return optim.SGD(param_list, lr = lr, momentum=momentum, weight_decay=w_decay)
+    
 class BCELoss(nn.Module):
     def forward(self, pos_score, neg_score, average=True):
         pos_loss = -F.log_softmax(pos_score, dim=1)[:, 1]
@@ -83,3 +117,11 @@ class BCELoss(nn.Module):
         if average:
             loss /= (pos_loss.size(0) + neg_loss.size(0))
         return loss
+
+
+class Precision():
+    def __call__(self, pos_score, neg_score):
+        scores = torch.cat((pos_score[:, 1], neg_score[:, 1]), 0)
+        topk = torch.topk(scores, pos_score.size(0))[1]
+        prec = (topk < pos_score.size(0)).float().sum() / (pos_score.size(0) + 1e-8)
+        return prec.item()
