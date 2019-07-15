@@ -29,20 +29,20 @@ class MDNet(nn.Module):
                                     nn.Linear(512, 512),
                                     nn.ReLU(inplace=True)))]))
 
-        self.branches = nn.ModuleList([nn.Sequential(nn.Dropout(0.5),
-                                                     nn.Linear(512, 2)) for _ in range(K)])
-
+        # TODO: fill self.branches
+        self.branches = 
+    
         for m in self.layers.modules():
             if isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, 0, 0.01)
                 nn.init.constant_(m.bias, 0.1)
+
         for m in self.branches.modules():
             if isinstance(m, nn.Linear):
                 nn.init.normal_(m.weight, 0, 0.01)
                 nn.init.constant_(m.bias, 0)
 
         # Load pre-trained weights
-        
         if model_path.split('.')[-1] == 'pth':
             self.layers.load_state_dict(torch.load(model_path)['shared_layers'])
         elif model_path.split('.')[-1] == 'mat':
@@ -75,17 +75,16 @@ class MDNet(nn.Module):
             if name == in_layer:
                 run = True
             if run:
-                x = module(x)
-                if name == 'conv3':
+                if name.startswith('fc'):
                     x = x.view(x.size(0), -1)
+                x = module(x)
                 if name == out_layer:
                     return x
-
-        x = self.branches[k](x)
-        if out_layer == 'fc6':
-            return x
-        elif out_layer == 'fc6_softmax':
-            return F.softmax(x, dim=1)
+                
+        # TODO: forward x to each branch
+        x = 
+        
+        return x
     
     def set_learnable_params(self, layers):
         for k, p in self.params.items():
@@ -107,6 +106,7 @@ class MDNet(nn.Module):
             param_list.append({'params': [p], 'lr':lr})
             
         return optim.SGD(param_list, lr = lr, momentum=momentum, weight_decay=w_decay)
+
     
 class BCELoss(nn.Module):
     def forward(self, pos_score, neg_score, average=True):
