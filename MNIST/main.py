@@ -1,12 +1,25 @@
-import argparse
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
+from typing import Tuple
+
+
+DATASET_DIR = './data' # path to download mnist dataset
+
+TRAIN_DATASET = datasets.MNIST(DATASET_DIR,   # Dataset root path
+                               train=True,    # Train data
+                               download=True) # Download if not exist
+
+TEST_DATASET = datasets.MNIST(DATASET_DIR,    # Dataset root path
+                              train=False)    # Test data
 
 
 class Network(nn.Module):
+    """Simple Neural Network contains conv layer and fc layer
+    """
     def __init__(self):
         super(Network, self).__init__()
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
@@ -14,18 +27,28 @@ class Network(nn.Module):
         self.fc1 = nn.Linear(4*4*50, 500)
         self.fc2 = nn.Linear(500, 10)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = F.relu(self.conv1(x))
         x = F.max_pool2d(x, 2, 2)
         x = F.relu(self.conv2(x))
         x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 4*4*50)
+        x = x.view(-1, 4 * 4 * 50)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
 
-def train(args, model, device, train_loader, optimizer, epoch):
+def train(model, device, train_loader, optimizer) -> float:
+    """Train function
+
+        Arguments:
+            model (nn.Module): some networks extends from ``nn.Module``.
+            device (torch.device): device for use CUDA if available.
+            train_loader (torch.utils.data.dataloader.DataLoader): train data loader.
+            optimizer (torch.optim): optimizer
+
+        Returns: loss (float)
+    """
     model.train()
 
     for batch_idx, (data, target) in enumerate(train_loader):
@@ -37,13 +60,22 @@ def train(args, model, device, train_loader, optimizer, epoch):
         loss.backward()
         optimizer.step()
 
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.item()))
+    return loss.item()
 
 
-def test(args, model, device, test_loader):
+def test(model, device, test_loader) -> Tuple[float, float, torch.Tensor]:
+    """Test function
+
+        Arguments:
+            model (nn.Module): some networks extends from ``nn.Module``.
+            device (torch.device): device for use CUDA if available.
+            test_loader (torch.utils.data.dataloader.DataLoader): test data loader.
+
+        Returns: tuple of below three
+            test_loss:
+            accuracy:
+            output:
+    """
     model.eval()
     test_loss, correct = 0, 0
 
@@ -57,62 +89,37 @@ def test(args, model, device, test_loader):
             correct += pred.eq(target.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
+    accuracy = 100. * correct / len(test_loader.dataset)
 
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
-
-
-def main():
-    # Setting arguments
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch', type=int, default=512, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    parser.add_argument('--epochs', type=int, default=10, metavar='N',
-                        help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=0.01, metavar='LR',
-                        help='learning rate (default: 0.01)')
-    parser.add_argument('--momentum', type=float, default=0.5, metavar='M',
-                        help='SGD momentum (default: 0.5)')
-
-    parser.add_argument('--seed', type=int, default=42, metavar='S',
-                        help='random seed (default: 42)')
-    parser.add_argument('--log-interval', type=int, default=100, metavar='N',
-                        help='how many batches to wait before logging training status')
-    args = parser.parse_args()
-
-    torch.manual_seed(args.seed)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    kwargs = {
-        'num_workers': 1,
-        'pin_memory': True
-    } if device.type == 'cuda' else {}
-
-    train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=True, download=True,
-                       transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=args.batch, shuffle=True, **kwargs)
-    test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('../data', train=False, transform=transforms.Compose([
-                           transforms.ToTensor(),
-                           transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-        batch_size=args.test_batch, shuffle=True, **kwargs)
-
-    model = Network().to(device)
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-
-    for epoch in range(1, args.epochs + 1):
-        train(args, model, device, train_loader, optimizer, epoch)
-        test(args, model, device, test_loader)
-
-    torch.save(model.state_dict(), "mnist_cnn.pt")
+    return test_loss, accuracy, output
 
 
-if __name__ == '__main__':
-    main()
+torch.manual_seed(42)  # 42, THE ANSWER TO LIFE, THE UNIVERSE AND EVERYTHING
+
+batch = 64  # batch size
+lr = .01  # learning rate
+epochs = 10
+
+TRAIN_DATASET.transform = transforms.ToTensor()
+train_loader = torch.utils.data.DataLoader(TRAIN_DATASET,
+                                           batch_size=64,
+                                           shuffle=True)
+
+TEST_DATASET.transform = transforms.ToTensor()
+test_loader = torch.utils.data.DataLoader(TEST_DATASET,
+                                          batch_size=64,
+                                          shuffle=True)
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+model = Network().to(device)
+optimizer = optim.SGD(model.parameters(), lr=lr)
+
+for epoch in range(1, epochs + 1):
+    train_loss = train(model, device, train_loader, optimizer)
+    test_loss, accuracy, _ = test(model, device, test_loader)
+
+    print('Epoch: {}\t Loss: {:.6f}'.format(epoch, train_loss))
+    print('\t\t Average Loss: {:.4f}, Accuracy: {:.0f}%'.format(test_loss, accuracy))
+
+torch.save(model.state_dict(), "mnist_cnn.pt")  # save trained model named 'mnist_cnn.pt'
