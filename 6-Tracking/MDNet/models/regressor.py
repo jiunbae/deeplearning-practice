@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.linear_model import Ridge
 
-from utils import overlap_ratio
+from ..utils import overlap_ratio
 
 class BBRegressor():
 
@@ -29,6 +29,7 @@ class BBRegressor():
         bbox = bbox[idx]
 
         Y = self.get_examples(bbox, gt)
+        
         self.model.fit(X, Y)
 
     def predict(self, X, bbox):

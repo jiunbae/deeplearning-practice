@@ -30,7 +30,8 @@ class MDNet(nn.Module):
                                     nn.ReLU(inplace=True)))]))
 
         # TODO: fill self.branches
-        self.branches = 
+        self.branches = nn.ModuleList([nn.Sequential(nn.Dropout(.5),
+                                       nn.Linear(512, 2)) for _ in range(K)])
     
         for m in self.layers.modules():
             if isinstance(m, nn.Linear):
@@ -75,16 +76,18 @@ class MDNet(nn.Module):
             if name == in_layer:
                 run = True
             if run:
-                if name.startswith('fc'):
-                    x = x.view(x.size(0), -1)
                 x = module(x)
+                if name == 'conv3':
+                    x = x.reshape(x.size(0), -1)
                 if name == out_layer:
                     return x
                 
         # TODO: forward x to each branch
-        x = 
-        
-        return x
+        x = self.branches[k](x)
+        if out_layer=='fc6':
+            return x
+        elif out_layer=='fc6_softmax':
+            return F.softmax(x, dim=1)
     
     def set_learnable_params(self, layers):
         for k, p in self.params.items():

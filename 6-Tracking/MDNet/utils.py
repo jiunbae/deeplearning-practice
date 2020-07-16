@@ -4,7 +4,7 @@ import cv2
 
 class Options:
     use_gpu = True
-    model_path = "bin/mdnet_vot-otb.pth"
+    model_path = "../data/mdnet_otb.pth"
     img_size = 107
     padding = 16
     batch_pos = 32

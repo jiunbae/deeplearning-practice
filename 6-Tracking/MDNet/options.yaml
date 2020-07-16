@@ -1,8 +1,8 @@
 use_gpu: true
 
 # model path
-init_model_path: "bin/imagenet-vgg-m.mat"
-model_path: "bin/mdnet_otb.pth"
+init_model_path: "../data/imagenet-vgg-m.mat"
+model_path: "../data/mdnet_otb.pth"
 
 # input size
 img_size: 107
@@ -25,5 +25,5 @@ overlap_neg: [0, 0.5]
 lr: 0.0001
 grad_clip: 10
 lr_mult: {"fc": 10}
-ft_layers: ["conv", "fc"]
-n_cycles: 50
+ft_layers: ["fc"]
+n_cycles: 32

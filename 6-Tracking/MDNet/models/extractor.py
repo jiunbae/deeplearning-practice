@@ -3,7 +3,7 @@ import torch.utils.data as data
 import numpy as np
 from PIL import Image
 
-from utils import *
+from ..utils import *
 
 
 class SampleGenerator(object):
